@@ -3,8 +3,8 @@ from datetime import date, timedelta
 from data import SOUTH_INDIAN_TALENT_DB, GENRE_BASELINES
 from formula import calculate_v3i_logic
 
-st.set_page_config(page_title="Cinema Predictor v3i", layout="wide")
-st.title("🎬 Cinema Predictor: Future-Dated Analysis")
+st.set_page_config(page_title="Cinema Predictor", layout="wide")
+st.title("Cinema Predictor: Future-Dated Analysis")
 
 with st.sidebar:
     st.header("Project Parameters")
@@ -48,4 +48,4 @@ st.metric("Estimated Revenue", f"₹{rev:.1f} Cr")
 st.metric("ROI", f"{roi:.1f}%")
 
 if roi < 0:
-    st.error(f"⚠️ High Risk: A release on {release_date.year} for this budget-talent mix is not currently viable.")
+    st.error(f"High Risk: A release on {release_date.year} for this budget-talent mix is not currently viable.")
