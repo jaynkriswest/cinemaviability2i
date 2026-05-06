@@ -1,11 +1,10 @@
 SOUTH_INDIAN_TALENT_DB = {
-    "Chiranjeevi": {"score": 98, "category": "Ultra-Veteran"},
-    "Rajinikanth": {"score": 98, "category": "Ultra-Veteran"},
-    "Mammootty": {"score": 96, "category": "Ultra-Veteran"},
-    "Prabhas": {"score": 94, "category": "Superstar"},
-    "Allu Arjun": {"score": 93, "category": "Superstar"},
-    "Mahesh Babu": {"score": 92, "category": "Superstar"},
-    "Siddu Jonnalagadda": {"score": 72, "category": "Rising Star"}
+    "Chiranjeevi": {"score": 98, "tier": "Ultra-Veteran"},
+    "Rajinikanth": {"score": 98, "tier": "Ultra-Veteran"},
+    "Mammootty": {"score": 96, "tier": "Ultra-Veteran"},
+    "Prabhas": {"score": 94, "tier": "Superstar"},
+    "Allu Arjun": {"score": 93, "tier": "Superstar"},
+    "Siddu Jonnalagadda": {"score": 72, "tier": "Rising Star"}
 }
 
 GENRE_BASELINES = {
@@ -17,4 +16,4 @@ GENRE_BASELINES = {
 }
 
 def get_talent_weight(name):
-    return SOUTH_INDIAN_TALENT_DB.get(name, {"score": 60, "category": "Rising Star"})
+    return SOUTH_INDIAN_TALENT_DB.get(name, {"score": 60, "tier": "Rising Star"})
