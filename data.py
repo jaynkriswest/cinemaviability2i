@@ -1,19 +1,37 @@
-SOUTH_INDIAN_TALENT_DB = {
-    "Chiranjeevi": {"score": 98, "tier": "Ultra-Veteran"},
-    "Rajinikanth": {"score": 98, "tier": "Ultra-Veteran"},
-    "Mammootty": {"score": 96, "tier": "Ultra-Veteran"},
-    "Prabhas": {"score": 94, "tier": "Superstar"},
-    "Allu Arjun": {"score": 93, "tier": "Superstar"},
-    "Siddu Jonnalagadda": {"score": 72, "tier": "Rising Star"}
+# data.py
+
+# Based on Pillar 1: Talent (30% Weight) from v3i_3.docx
+TALENT_DATABASE = {
+    "Chiranjeevi": {
+        "score": 98, 
+        "tier": "Ultra-Veteran", 
+        "criteria": "200+ Credits / Highest ROI Stability Floor"
+    },
+    "Rajinikanth": {
+        "score": 98, 
+        "tier": "Ultra-Veteran", 
+        "criteria": "200+ Credits"
+    },
+    "Balakrishna": {
+        "score": 90, 
+        "tier": "Veteran", 
+        "criteria": "25+ Year Track Record"
+    },
+    "Prabhas": {
+        "score": 92, 
+        "tier": "Superstar", 
+        "criteria": "10-25 Year Career / Peak Popularity"
+    },
+    "Siddu Jonnalagadda": {
+        "score": 70, 
+        "tier": "Rising Star", 
+        "criteria": "High Growth Velocity"
+    }
 }
 
-GENRE_BASELINES = {
-    "Mass Action": 95,
-    "Family Drama": 85,
-    "Mythological": 90,
-    "Romance": 75,
-    "Sci-Fi": 65
+# Based on Pillar 3: Content (20% Weight) from v3i_3.docx
+GENRE_METRICS = {
+    "Mass Action": {"base_score": 95, "risk": "Low / High ROI"},
+    "Sci-Fi": {"base_score": 65, "risk": "High Risk"},
+    "Family Drama": {"base_score": 85, "risk": "Stable / High Seasonal Affinity"}
 }
-
-def get_talent_weight(name):
-    return SOUTH_INDIAN_TALENT_DB.get(name, {"score": 60, "tier": "Rising Star"})
