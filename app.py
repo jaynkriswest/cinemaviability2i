@@ -1,6 +1,6 @@
-#Clde version updates with gemini + CGPT
+# Clde version updates with gemini + CGPT
 
-# app.py - Corrected Version
+# app.py - new version
 
 import streamlit as st
 import requests
@@ -20,15 +20,10 @@ from formula import (
     calculate_detailed_prediction,
 )
 
-from intelligence import (
-    calculate_commercial_viability,
-    generate_producer_actions,
-    generate_producer_warnings,
-    calculate_theater_strategy,
-)
-
 from movie_insights import (
-    calculate_likeness_score,
+    search_movies_by_synopsis,
+    fetch_full_movie_details,
+    calculate_future_likeness,
     classify_movie_success,
     analyze_success_reasons,
     analyze_failure_reasons,
@@ -82,7 +77,10 @@ def search_movies_list(query):
             f"&query={query}"
         )
 
-        response = requests.get(url)
+        response = requests.get(
+            url,
+            timeout=15
+        )
 
         data = response.json()
 
@@ -122,7 +120,10 @@ def fetch_movie(tmdb_id):
             f"&append_to_response=credits"
         )
 
-        response = requests.get(url)
+        response = requests.get(
+            url,
+            timeout=15
+        )
 
         movie = response.json()
 
@@ -181,7 +182,10 @@ def get_similar_movies(tmdb_id):
             f"?api_key={TMDB_API_KEY}"
         )
 
-        response = requests.get(url)
+        response = requests.get(
+            url,
+            timeout=15
+        )
 
         data = response.json()
 
@@ -194,7 +198,7 @@ def get_similar_movies(tmdb_id):
 # TITLE
 # =====================================================
 
-st.title("Cinema Intelligence & Greenlight Platform")
+st.title("Cinema Intelligence Platform")
 
 # =====================================================
 # LAYOUT
@@ -203,12 +207,19 @@ st.title("Cinema Intelligence & Greenlight Platform")
 prediction_col, search_col = st.columns([1.2, 1])
 
 # =====================================================
-# LEFT SIDE
+# LEFT SIDE — FUTURE FILM PREDICTION
 # =====================================================
 
 with prediction_col:
 
     st.header("Prediction Monitor")
+
+    movie_synopsis = st.text_area(
+        "Future Movie Synopsis",
+        placeholder=(
+            "Describe the future movie concept..."
+        )
+    )
 
     genre = st.selectbox(
         "Genre",
@@ -304,103 +315,109 @@ with prediction_col:
     )
 
     # =====================================================
-    # COMMERCIAL VIABILITY
+    # FUTURE FILM MATCHING
     # =====================================================
 
-    viability = calculate_commercial_viability(
-        report,
-        budget,
-        genre,
-        has_clash,
-        release_date
-    )
+    if movie_synopsis:
 
-    st.subheader("Commercial Viability")
+        st.markdown("---")
 
-    st.metric(
-        "Viability Score",
-        f"{viability['score']}%"
-    )
-
-    st.success(
-        viability["label"]
-    )
-
-    # =====================================================
-    # PRODUCER ACTIONS
-    # =====================================================
-
-    st.subheader(
-        "Strategic Producer Actions"
-    )
-
-    producer_actions = (
-        generate_producer_actions(
-            report,
-            budget,
-            genre,
-            has_clash,
-            release_date
+        st.subheader(
+            "Closest Historical Matches"
         )
-    )
 
-    for action in producer_actions:
-        st.write(f"• {action}")
-
-    # =====================================================
-    # DON’TS
-    # =====================================================
-
-    st.subheader("Critical DON’Ts")
-
-    warnings = (
-        generate_producer_warnings(
-            budget,
-            genre,
-            has_clash,
-            release_date
+        historical_matches = (
+            search_movies_by_synopsis(
+                movie_synopsis,
+                TMDB_API_KEY
+            )
         )
-    )
 
-    for warning in warnings:
-        st.error(warning)
+        for movie in historical_matches:
 
-    # =====================================================
-    # THEATER STRATEGY
-    # =====================================================
+            likeness = (
+                calculate_future_likeness(
+                    movie_synopsis,
+                    genre,
+                    movie
+                )
+            )
 
-    theater_strategy = (
-        calculate_theater_strategy(
-            report["predictability_score"],
-            budget,
-            genre
-        )
-    )
+            detailed_movie = (
+                fetch_full_movie_details(
+                    movie["id"],
+                    TMDB_API_KEY
+                )
+            )
 
-    st.subheader("Theater Strategy")
+            performance = (
+                classify_movie_success(
+                    detailed_movie
+                )
+            )
 
-    st.write(
-        f"India Screens: "
-        f"{theater_strategy['india_screens']}"
-    )
+            st.markdown(
+                f"### {movie['title']}"
+            )
 
-    st.write(
-        f"Overseas Screens: "
-        f"{theater_strategy['overseas_screens']}"
-    )
+            st.write(
+                f"Likeness Score: "
+                f"{likeness}%"
+            )
 
-    st.write(
-        f"Multiplex Share: "
-        f"{theater_strategy['multiplex_share']}%"
-    )
+            st.write(
+                f"Performance: "
+                f"{performance}"
+            )
 
-    st.write(
-        f"Single Screen Share: "
-        f"{theater_strategy['single_screen_share']}%"
-    )
+            # =====================================================
+            # SUCCESS ANALYSIS
+            # =====================================================
+
+            success_reasons = (
+                analyze_success_reasons(
+                    detailed_movie
+                )
+            )
+
+            if success_reasons:
+
+                st.success(
+                    "Why It Worked"
+                )
+
+                for reason in success_reasons:
+
+                    st.write(
+                        f"• {reason}"
+                    )
+
+            # =====================================================
+            # FAILURE ANALYSIS
+            # =====================================================
+
+            failure_reasons = (
+                analyze_failure_reasons(
+                    detailed_movie
+                )
+            )
+
+            if failure_reasons:
+
+                st.error(
+                    "Why It Failed"
+                )
+
+                for reason in failure_reasons:
+
+                    st.write(
+                        f"• {reason}"
+                    )
+
+            st.markdown("---")
 
 # =====================================================
-# RIGHT SIDE
+# RIGHT SIDE — MOVIE SEARCH
 # =====================================================
 
 with search_col:
@@ -448,10 +465,12 @@ with search_col:
 
     if movie_data:
 
-        st.image(
-            movie_data["Poster"],
-            use_container_width=True
-        )
+        if movie_data["Poster"]:
+
+            st.image(
+                movie_data["Poster"],
+                use_container_width=True
+            )
 
         st.subheader(
             f"{movie_data['Title']} "
@@ -484,71 +503,6 @@ with search_col:
 
         for movie in similar_movies:
 
-            detailed_movie, raw_movie = (
-                fetch_movie(movie["id"])
-            )
-
-            likeness = (
-                calculate_likeness_score(
-                    movie_data,
-                    raw_movie
-                )
-            )
-
-            success = (
-                classify_movie_success(
-                    raw_movie
-                )
-            )
-
             st.markdown(
-                f"### {raw_movie.get('title')} "
-                f"({raw_movie.get('release_date', '')[:4]})"
+                f"• {movie.get('title')}"
             )
-
-            st.write(
-                f"Likeness Score: {likeness}%"
-            )
-
-            st.write(
-                f"Performance: {success}"
-            )
-
-            # =====================================================
-            # SUCCESS ANALYSIS
-            # =====================================================
-
-            if success in [
-                "Blockbuster",
-                "Hit"
-            ]:
-
-                reasons = (
-                    analyze_success_reasons(
-                        raw_movie
-                    )
-                )
-
-                st.success(
-                    "Why It Worked"
-                )
-
-                for reason in reasons:
-                    st.write(f"• {reason}")
-
-            else:
-
-                reasons = (
-                    analyze_failure_reasons(
-                        raw_movie
-                    )
-                )
-
-                st.error(
-                    "Why It Failed"
-                )
-
-                for reason in reasons:
-                    st.write(f"• {reason}")
-
-            st.markdown("---")

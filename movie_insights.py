@@ -1,76 +1,128 @@
+import requests
 from difflib import SequenceMatcher
 
 # =====================================================
-# LIKENESS SCORE: CGPT version
+# SEARCH MOVIES USING SYNOPSIS
 # =====================================================
 
-def calculate_likeness_score(
-    current_movie,
-    comparison_movie
+def search_movies_by_synopsis(
+    synopsis,
+    api_key
+):
+
+    try:
+
+        query = synopsis[:100]
+
+        url = (
+            "https://api.themoviedb.org/3/search/movie"
+            f"?api_key={api_key}"
+            f"&query={query}"
+        )
+
+        response = requests.get(
+            url,
+            timeout=15
+        )
+
+        data = response.json()
+
+        return data.get("results", [])[:5]
+
+    except:
+        return []
+
+# =====================================================
+# FETCH FULL MOVIE DETAILS
+# =====================================================
+
+def fetch_full_movie_details(
+    movie_id,
+    api_key
+):
+
+    try:
+
+        url = (
+            f"https://api.themoviedb.org/3/movie/{movie_id}"
+            f"?api_key={api_key}"
+        )
+
+        response = requests.get(
+            url,
+            timeout=15
+        )
+
+        return response.json()
+
+    except:
+        return {}
+
+# =====================================================
+# FUTURE FILM LIKENESS SCORE
+# =====================================================
+
+def calculate_future_likeness(
+    future_synopsis,
+    future_genre,
+    historical_movie
 ):
 
     score = 0
 
-    current_genres = set(
-        current_movie.get(
-            "Genre",
-            ""
-        ).lower().split(",")
+    # Synopsis similarity
+    overview = historical_movie.get(
+        "overview",
+        ""
     )
 
-    comparison_genres = set(
-        [
-            genre["name"].lower()
-            for genre in comparison_movie.get(
-                "genres",
-                []
-            )
-        ]
+    synopsis_similarity = (
+        SequenceMatcher(
+            None,
+            future_synopsis.lower(),
+            overview.lower()
+        ).ratio()
     )
 
-    genre_overlap = len(
-        current_genres.intersection(
-            comparison_genres
-        )
+    score += synopsis_similarity * 70
+
+    # Genre weighting
+    genre_ids = historical_movie.get(
+        "genre_ids",
+        []
     )
 
-    score += genre_overlap * 20
+    if genre_ids:
+        score += 20
 
-    title_similarity = SequenceMatcher(
-        None,
-        current_movie.get("Title", ""),
-        comparison_movie.get("title", "")
-    ).ratio()
-
-    score += title_similarity * 15
-
-    popularity = comparison_movie.get(
+    # Popularity weighting
+    popularity = historical_movie.get(
         "popularity",
         0
     )
 
-    score += min(popularity / 4, 25)
-
-    vote_average = comparison_movie.get(
-        "vote_average",
-        0
-    )
-
-    score += vote_average * 3
+    score += min(popularity / 10, 10)
 
     return round(min(score, 100), 1)
 
 # =====================================================
-# SUCCESS CLASSIFICATION
+# PERFORMANCE CLASSIFICATION
 # =====================================================
 
 def classify_movie_success(movie):
 
-    revenue = movie.get("revenue", 0)
-    budget = movie.get("budget", 1)
+    revenue = movie.get(
+        "revenue",
+        0
+    )
+
+    budget = movie.get(
+        "budget",
+        1
+    )
 
     if budget <= 0:
-        budget = 1
+        return "Unknown"
 
     roi = revenue / budget
 
@@ -86,17 +138,37 @@ def classify_movie_success(movie):
     return "Flop"
 
 # =====================================================
-# SUCCESS REASONS
+# SUCCESS ANALYSIS
 # =====================================================
 
 def analyze_success_reasons(movie):
 
     reasons = []
 
-    popularity = movie.get("popularity", 0)
-    revenue = movie.get("revenue", 0)
-    budget = movie.get("budget", 1)
-    runtime = movie.get("runtime", 0)
+    popularity = movie.get(
+        "popularity",
+        0
+    )
+
+    vote_average = movie.get(
+        "vote_average",
+        0
+    )
+
+    runtime = movie.get(
+        "runtime",
+        0
+    )
+
+    revenue = movie.get(
+        "revenue",
+        0
+    )
+
+    budget = movie.get(
+        "budget",
+        1
+    )
 
     roi = revenue / max(budget, 1)
 
@@ -112,10 +184,16 @@ def analyze_success_reasons(movie):
             "Excellent commercial ROI efficiency."
         )
 
+    if vote_average > 7:
+
+        reasons.append(
+            "Positive audience reception."
+        )
+
     if runtime < 170:
 
         reasons.append(
-            "Audience-friendly runtime helped theatrical pull."
+            "Audience-friendly runtime supported theatrical performance."
         )
 
     genres = [
@@ -129,23 +207,44 @@ def analyze_success_reasons(movie):
     if "Action" in genres:
 
         reasons.append(
-            "Mass-market action appeal improved collections."
+            "Strong mass-market action appeal."
+        )
+
+    if "Family" in genres:
+
+        reasons.append(
+            "Broad family audience accessibility."
         )
 
     return reasons
 
 # =====================================================
-# FAILURE REASONS
+# FAILURE ANALYSIS
 # =====================================================
 
 def analyze_failure_reasons(movie):
 
     reasons = []
 
-    revenue = movie.get("revenue", 0)
-    budget = movie.get("budget", 1)
-    popularity = movie.get("popularity", 0)
-    runtime = movie.get("runtime", 0)
+    popularity = movie.get(
+        "popularity",
+        0
+    )
+
+    runtime = movie.get(
+        "runtime",
+        0
+    )
+
+    revenue = movie.get(
+        "revenue",
+        0
+    )
+
+    budget = movie.get(
+        "budget",
+        1
+    )
 
     roi = revenue / max(budget, 1)
 
@@ -153,12 +252,6 @@ def analyze_failure_reasons(movie):
 
         reasons.append(
             "Weak commercial ROI performance."
-        )
-
-    if budget > 250000000:
-
-        reasons.append(
-            "Oversized production budget increased risk."
         )
 
     if popularity < 40:
@@ -170,7 +263,13 @@ def analyze_failure_reasons(movie):
     if runtime > 180:
 
         reasons.append(
-            "Excessive runtime likely reduced repeat audiences."
+            "Excessive runtime may reduce repeat viewership."
+        )
+
+    if budget > 250000000:
+
+        reasons.append(
+            "High production budget increased financial risk."
         )
 
     return reasons
