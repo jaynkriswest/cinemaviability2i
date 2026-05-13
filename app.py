@@ -1,11 +1,14 @@
 #Clde version updates with gemini
 
+# app.py - Corrected Version
+
 import streamlit as st
 import requests
 import os
 from dotenv import load_dotenv
 from datetime import date
 import logging
+# Ensure these match the dictionary names in data.py and function names in formula.py
 from data import GENRE_METRICS, SOUTH_INDIAN_ACTORS, DIRECTORS, SEASONAL_MULTIPLIERS
 from formula import calculate_v3i_logic, calculate_detailed_prediction
 
@@ -39,17 +42,14 @@ def search_movies_list(query):
 def fetch_detailed_data(imdb_id):
     """Fetches full details using a specific IMDb ID."""
     try:
-        # 1. Exact details from OMDb
         omdb = requests.get(f"http://www.omdbapi.com/?i={imdb_id}&apikey={OMDB_API_KEY}").json()
-        
-        # 2. TMDB search using Title to get Credits/Budget
         title = omdb.get("Title")
         tmdb_search = requests.get(f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={title}").json()
         
         tmdb_data = {}
         if tmdb_search.get('results'):
-            # Match by year if possible
             year = omdb.get("Year", "")[:4]
+            # Select the first result if a year match isn't found
             match = next((m for m in tmdb_search['results'] if m.get('release_date', '').startswith(year)), tmdb_search['results'])
             m_id = match['id']
             tmdb_data = requests.get(f"https://api.themoviedb.org/3/movie/{m_id}?api_key={TMDB_API_KEY}&append_to_response=credits").json()
@@ -73,11 +73,8 @@ with st.sidebar:
     if search_query:
         search_results = search_movies_list(search_query)
         if search_results:
-            # Create a dictionary for the selectbox: "Title (Year)" -> imdbID
             options = {f"{m['Title']} ({m['Year']})": m['imdbID'] for m in search_results}
             selected_label = st.selectbox("Step 2: Select the correct version", options.keys())
-            
-            # Fetch the final details based on selection
             if selected_label:
                 omdb, tmdb = fetch_detailed_data(options[selected_label])
         else:
@@ -85,24 +82,24 @@ with st.sidebar:
 
     st.divider()
     
-    # Pillar Inputs (Auto-populated if movie found)
     st.header("Step 3: Analyze Pillars")
     
     # Auto-mapping logic
     default_genre = "Action"
     if omdb:
+        # FIX: Added to extract the first genre string before stripping
         raw_genre = omdb.get("Genre", "Action").split(",").strip()
         default_genre = raw_genre if raw_genre in GENRE_METRICS else "Action"
 
     genre = st.selectbox("Genre", list(GENRE_METRICS.keys()), index=list(GENRE_METRICS.keys()).index(default_genre))
     
+    # Using the correct variable name from data.py
     actor_key = st.selectbox("Lead Actor", list(SOUTH_INDIAN_ACTORS.keys()))
     director_key = st.selectbox("Director", list(DIRECTORS.keys()))
     
     release_date = st.date_input("Release Date", value=date(2026, 1, 12))
     has_clash = st.checkbox("Superstar Clash?")
     
-    # Budget safety
     tmdb_budget = (tmdb.get("budget", 0) / 10_000_000) if tmdb else 0
     budget = st.number_input("Budget (Crores)", value=float(tmdb_budget) if tmdb_budget > 0 else 100.0)
 
@@ -111,7 +108,6 @@ with st.sidebar:
 # =====================================================
 
 if omdb:
-    # Prepare inputs for the formula
     m_market = SEASONAL_MULTIPLIERS.get(release_date.month, 1.0)
     
     calc_inputs = {
@@ -120,12 +116,13 @@ if omdb:
         "market_multiplier": m_market,
         "has_clash": has_clash,
         "content_score": GENRE_METRICS[genre]['base_score'],
-        "viral_score": 75, # Default viral score
+        "viral_score": 75,
         "seasonal_score": 85 if m_market > 1.0 else 70,
         "m_cert": 1.0,
         "budget": budget if budget > 0 else 1.0
     }
 
+    # Using the correct function name from formula.py
     report = calculate_detailed_prediction(calc_inputs)
 
     # UI Metrics
@@ -136,7 +133,6 @@ if omdb:
 
     st.divider()
     
-    # Metadata Display
     col_a, col_b = st.columns()
     with col_a:
         if omdb.get("Poster") != "N/A":
