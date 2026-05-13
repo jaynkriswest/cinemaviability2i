@@ -9,7 +9,6 @@ from formula import calculate_v3i_logic
 # 1. SETUP & SECURITY
 load_dotenv()
 
-# Prioritize Streamlit Secrets for cloud deployment
 OMDB_API_KEY = st.secrets.get("OMDB_API_KEY") or os.getenv("OMDB_API_KEY")
 TMDB_API_KEY = st.secrets.get("TMDB_API_KEY") or os.getenv("TMDB_API_KEY")
 
@@ -30,7 +29,7 @@ def fetch_movie_metadata(title):
         
         tmdb_details = {}
         if tmdb_search.get('results') and len(tmdb_search['results']) > 0:
-            # FIX 1: Added to get the ID from the first result
+            # FIX 1: Added to get the ID from the first result in the list
             movie_id = tmdb_search['results']['id']
             tmdb_details = requests.get(f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&append_to_response=credits").json()
         
@@ -54,22 +53,20 @@ with st.sidebar:
         cert_val = omdb.get("Rated", "UA")
         m_cert = {"U": 1.2, "UA": 1.0, "U/A": 1.0, "A": 0.7}.get(cert_val, 1.0)
         
-        # FIX 2: Added before .strip() to clean the first genre string
+        # FIX 2: Added before .strip() to clean the first genre string from the list
         raw_genre = omdb.get("Genre", "Action")
         first_genre = raw_genre.split(",").strip()
         genre = first_genre if first_genre in GENRE_METRICS else "Action"
         
-        # Convert TMDB value to Crores
-        tmdb_val = tmdb.get("budget", 0)
+        tmdb_val = tmdb.get("budget", 0) if tmdb else 0
         budget = st.number_input("Budget (Crores)", value=float(tmdb_val / 10000000) if tmdb_val > 0 else 200.0)
     else:
         st.warning("Manual fallback active.")
         m_cert = 1.0
         genre = "Action"
-        # SAFETY: Ensure default budget is NEVER 0.0 to avoid ZeroDivisionError
         budget = st.number_input("Budget (Crores)", value=200.0)
 
-    # --- Pillar Selections ---
+    # ... [Keep Talent Tier and Market inputs same as your current file]
     st.header("Pillar 1: Talent")
     talent_tier = st.selectbox("Assign Talent Tier", ["Ultra-Veteran", "Veteran", "Superstar", "Rising Star"])
     talent_map = {"Ultra-Veteran": 98, "Veteran": 90, "Superstar": 92, "Rising Star": 70}
@@ -93,7 +90,7 @@ inputs = {
     "seasonal_score": 85 if m_market > 1.0 else 70,
     "m_cert": m_cert,
     "m_align": 1.0,
-    "budget": budget if budget > 0 else 1.0, # SAFETY: Final check to prevent division by zero
+    "budget": budget if budget > 0 else 1.0, # SAFETY: Prevents ZeroDivisionError
     "is_franchise": False 
 }
 
