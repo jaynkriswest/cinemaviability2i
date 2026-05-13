@@ -7,8 +7,10 @@ from data import GENRE_METRICS
 from formula import calculate_v3i_logic
 
 # 1. SETUP & SECURITY
+# Loads local .env for local testing; Streamlit Cloud uses its own Secrets
 load_dotenv()
 
+# Use secrets from Streamlit Cloud or local .env file
 OMDB_API_KEY = st.secrets.get("OMDB_API_KEY") or os.getenv("OMDB_API_KEY")
 TMDB_API_KEY = st.secrets.get("TMDB_API_KEY") or os.getenv("TMDB_API_KEY")
 
@@ -19,25 +21,28 @@ st.title("🎬 South Indian Cinema Predictability Model v3i")
 def fetch_movie_metadata(title):
     if not OMDB_API_KEY or not TMDB_API_KEY:
         st.error("API Keys missing. Please check your .env or Streamlit Secrets.")
-        return None
+        return None, None
     
     # Fetch from OMDb
-    omdb_res = requests.get(f"http://www.omdbapi.com/?t={title}&apikey={OMDB_API_KEY}").json()
+    omdb_url = f"http://www.omdbapi.com/?t={title}&apikey={OMDB_API_KEY}"
+    omdb_res = requests.get(omdb_url).json()
     
     # Fetch from TMDB for Credits & Budget
-    tmdb_search = requests.get(f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={title}").json()
+    tmdb_search_url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={title}"
+    tmdb_search = requests.get(tmdb_search_url).json()
     
     tmdb_details = {}
     if tmdb_search.get('results') and len(tmdb_search['results']) > 0:
-        # FIX: Get the ID from the first result in the list
+        # FIX: Access the first result to get the ID correctly
         movie_id = tmdb_search['results']['id']
-        tmdb_details = requests.get(f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&append_to_response=credits").json()
+        details_url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&append_to_response=credits"
+        tmdb_details = requests.get(details_url).json()
     
     return omdb_res, tmdb_details
 
 # 3. SIDEBAR INPUTS
 with st.sidebar:
-    st.header("🔍 Real-Time Search")
+    st.header("Real-Time Search")
     search_query = st.text_input("Enter Movie Title", value="Mana Shankara Varaprasad Garu")
     
     omdb, tmdb = None, None
@@ -52,7 +57,7 @@ with st.sidebar:
         cert_val = omdb.get("Rated", "UA")
         m_cert = {"U": 1.2, "UA": 1.0, "U/A": 1.0, "A": 0.7}.get(cert_val, 1.0)
         
-        # FIX: Parse Genre correctly (Take first genre and remove extra spaces)
+        # FIX: Parse Genre correctly (Take the first word and clean spaces)
         raw_genre = omdb.get("Genre", "Action")
         first_genre = raw_genre.split(",").strip()
         genre = first_genre if first_genre in GENRE_METRICS else "Action"
@@ -88,7 +93,7 @@ inputs = {
     "market_base": 85,
     "market_multiplier": m_market,
     "has_clash": has_clash,
-    "content_score": GENRE_METRICS[genre]['base_score'], # Will now work!
+    "content_score": GENRE_METRICS[genre]['base_score'], # Works now that genre is a string
     "viral_score": viral_map[viral_tier],
     "seasonal_score": 85 if m_market > 1.0 else 70,
     "m_cert": m_cert,
