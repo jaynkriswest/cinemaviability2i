@@ -2,7 +2,7 @@ import requests
 from difflib import SequenceMatcher
 
 # =====================================================
-# SEARCH MOVIES USING SYNOPSIS
+# SEARCH MOVIES USING FUTURE SYNOPSIS
 # =====================================================
 
 def search_movies_by_synopsis(
@@ -12,7 +12,104 @@ def search_movies_by_synopsis(
 
     try:
 
-        query = synopsis[:100]
+        synopsis_lower = synopsis.lower()
+
+        # =================================================
+        # SMART KEYWORD DETECTION
+        # =================================================
+
+        keywords = []
+
+        keyword_map = {
+
+            "superhero": [
+                "superhero",
+                "powers",
+                "villain",
+                "hero"
+            ],
+
+            "action": [
+                "fight",
+                "violence",
+                "gang",
+                "revenge",
+                "mass",
+                "criminal",
+                "corruption"
+            ],
+
+            "horror": [
+                "ghost",
+                "haunted",
+                "spirit",
+                "supernatural"
+            ],
+
+            "sports": [
+                "athlete",
+                "sports",
+                "cricket",
+                "football",
+                "boxing"
+            ],
+
+            "sci-fi": [
+                "robot",
+                "ai",
+                "technology",
+                "future",
+                "space",
+                "alien"
+            ],
+
+            "fantasy": [
+                "kingdom",
+                "magic",
+                "warrior",
+                "ancient"
+            ]
+        }
+
+        # =================================================
+        # DETECT KEYWORDS FROM SYNOPSIS
+        # =================================================
+
+        for category, words in keyword_map.items():
+
+            for word in words:
+
+                if word in synopsis_lower:
+
+                    keywords.append(word)
+
+        # =================================================
+        # FALLBACK KEYWORDS
+        # =================================================
+
+        if not keywords:
+
+            keywords = [
+                word for word in synopsis.split()
+                if len(word) > 5
+            ][:5]
+
+        # =================================================
+        # FINAL QUERY
+        # =================================================
+
+        query = " ".join(keywords)
+
+        # Safety fallback
+        if not query:
+            query = synopsis[:40]
+
+        # Debugging
+        print("TMDB QUERY:", query)
+
+        # =================================================
+        # TMDB SEARCH
+        # =================================================
 
         url = (
             "https://api.themoviedb.org/3/search/movie"
@@ -25,11 +122,16 @@ def search_movies_by_synopsis(
             timeout=15
         )
 
+        response.raise_for_status()
+
         data = response.json()
 
         return data.get("results", [])[:5]
 
-    except:
+    except Exception as e:
+
+        print("TMDB SEARCH ERROR:", e)
+
         return []
 
 # =====================================================
@@ -53,9 +155,14 @@ def fetch_full_movie_details(
             timeout=15
         )
 
+        response.raise_for_status()
+
         return response.json()
 
-    except:
+    except Exception as e:
+
+        print("DETAIL FETCH ERROR:", e)
+
         return {}
 
 # =====================================================
@@ -70,7 +177,10 @@ def calculate_future_likeness(
 
     score = 0
 
-    # Synopsis similarity
+    # =====================================================
+    # SYNOPSIS SIMILARITY
+    # =====================================================
+
     overview = historical_movie.get(
         "overview",
         ""
@@ -86,24 +196,38 @@ def calculate_future_likeness(
 
     score += synopsis_similarity * 70
 
-    # Genre weighting
-    genre_ids = historical_movie.get(
-        "genre_ids",
-        []
-    )
+    # =====================================================
+    # POPULARITY WEIGHTING
+    # =====================================================
 
-    if genre_ids:
-        score += 20
-
-    # Popularity weighting
     popularity = historical_movie.get(
         "popularity",
         0
     )
 
-    score += min(popularity / 10, 10)
+    score += min(popularity / 10, 15)
 
-    return round(min(score, 100), 1)
+    # =====================================================
+    # VOTE AVERAGE
+    # =====================================================
+
+    vote_average = historical_movie.get(
+        "vote_average",
+        0
+    )
+
+    score += vote_average
+
+    # =====================================================
+    # FINAL SCORE
+    # =====================================================
+
+    final_score = round(
+        min(score, 100),
+        1
+    )
+
+    return final_score
 
 # =====================================================
 # PERFORMANCE CLASSIFICATION
@@ -172,11 +296,19 @@ def analyze_success_reasons(movie):
 
     roi = revenue / max(budget, 1)
 
+    # =====================================================
+    # POPULARITY
+    # =====================================================
+
     if popularity > 80:
 
         reasons.append(
             "Strong audience engagement and awareness."
         )
+
+    # =====================================================
+    # ROI
+    # =====================================================
 
     if roi > 2:
 
@@ -184,17 +316,29 @@ def analyze_success_reasons(movie):
             "Excellent commercial ROI efficiency."
         )
 
+    # =====================================================
+    # RATINGS
+    # =====================================================
+
     if vote_average > 7:
 
         reasons.append(
-            "Positive audience reception."
+            "Positive audience reception and ratings."
         )
 
-    if runtime < 170:
+    # =====================================================
+    # RUNTIME
+    # =====================================================
+
+    if runtime < 170 and runtime > 0:
 
         reasons.append(
             "Audience-friendly runtime supported theatrical performance."
         )
+
+    # =====================================================
+    # GENRE ANALYSIS
+    # =====================================================
 
     genres = [
         genre["name"]
@@ -214,6 +358,18 @@ def analyze_success_reasons(movie):
 
         reasons.append(
             "Broad family audience accessibility."
+        )
+
+    if "Adventure" in genres:
+
+        reasons.append(
+            "Large-scale adventure appeal increased audience reach."
+        )
+
+    if "Science Fiction" in genres:
+
+        reasons.append(
+            "High-concept sci-fi appeal attracted curiosity."
         )
 
     return reasons
@@ -248,11 +404,19 @@ def analyze_failure_reasons(movie):
 
     roi = revenue / max(budget, 1)
 
+    # =====================================================
+    # WEAK ROI
+    # =====================================================
+
     if roi < 1:
 
         reasons.append(
             "Weak commercial ROI performance."
         )
+
+    # =====================================================
+    # LOW POPULARITY
+    # =====================================================
 
     if popularity < 40:
 
@@ -260,16 +424,39 @@ def analyze_failure_reasons(movie):
             "Low audience engagement and buzz."
         )
 
+    # =====================================================
+    # LONG RUNTIME
+    # =====================================================
+
     if runtime > 180:
 
         reasons.append(
             "Excessive runtime may reduce repeat viewership."
         )
 
+    # =====================================================
+    # HIGH BUDGET RISK
+    # =====================================================
+
     if budget > 250000000:
 
         reasons.append(
             "High production budget increased financial risk."
+        )
+
+    # =====================================================
+    # LOW RATINGS
+    # =====================================================
+
+    vote_average = movie.get(
+        "vote_average",
+        0
+    )
+
+    if vote_average < 5:
+
+        reasons.append(
+            "Weak audience reception and ratings."
         )
 
     return reasons
