@@ -9,12 +9,12 @@ from formula import calculate_v3i_logic
 # 1. SETUP & SECURITY
 load_dotenv()
 
-# Prioritize Streamlit Secrets for cloud deployment, fallback to .env for local
+# Prioritize Streamlit Secrets for cloud deployment
 OMDB_API_KEY = st.secrets.get("OMDB_API_KEY") or os.getenv("OMDB_API_KEY")
 TMDB_API_KEY = st.secrets.get("TMDB_API_KEY") or os.getenv("TMDB_API_KEY")
 
 st.set_page_config(page_title="v3i Real-Time Predictor", layout="wide")
-st.title("South Indian Cinema Predictability Model v3i")
+st.title("🎬 South Indian Cinema Predictability Model v3i")
 
 # 2. DATA FETCHING FUNCTION
 def fetch_movie_metadata(title):
@@ -30,7 +30,7 @@ def fetch_movie_metadata(title):
         
         tmdb_details = {}
         if tmdb_search.get('results') and len(tmdb_search['results']) > 0:
-            # FIX: Added to get the ID from the first search result
+            # FIX 1: Added to get the ID from the first result
             movie_id = tmdb_search['results']['id']
             tmdb_details = requests.get(f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&append_to_response=credits").json()
         
@@ -41,7 +41,7 @@ def fetch_movie_metadata(title):
 # 3. SIDEBAR INPUTS
 with st.sidebar:
     st.header("Real-Time Search")
-    search_query = st.text_input("Enter Movie Title", value="")
+    search_query = st.text_input("Enter Movie Title", value="Mana Shankara Varaprasad Garu")
     
     omdb, tmdb = None, None
     if search_query:
@@ -51,24 +51,25 @@ with st.sidebar:
     
     if omdb and omdb.get("Response") == "True":
         st.success(f"Linked to: {omdb['Title']}")
-        # Map Certification
         cert_val = omdb.get("Rated", "UA")
         m_cert = {"U": 1.2, "UA": 1.0, "U/A": 1.0, "A": 0.7}.get(cert_val, 1.0)
         
-        # FIX: Added before .strip() to clean the first genre string
+        # FIX 2: Added before .strip() to clean the first genre string
         raw_genre = omdb.get("Genre", "Action")
         first_genre = raw_genre.split(",").strip()
         genre = first_genre if first_genre in GENRE_METRICS else "Action"
         
-        # Map Budget (Convert TMDB value to Crores)
+        # Convert TMDB value to Crores
         tmdb_val = tmdb.get("budget", 0)
         budget = st.number_input("Budget (Crores)", value=float(tmdb_val / 10000000) if tmdb_val > 0 else 200.0)
     else:
         st.warning("Manual fallback active.")
         m_cert = 1.0
         genre = "Action"
-        budget = st.number_input("Budget (Crores)", value=0.0)
+        # SAFETY: Ensure default budget is NEVER 0.0 to avoid ZeroDivisionError
+        budget = st.number_input("Budget (Crores)", value=200.0)
 
+    # --- Pillar Selections ---
     st.header("Pillar 1: Talent")
     talent_tier = st.selectbox("Assign Talent Tier", ["Ultra-Veteran", "Veteran", "Superstar", "Rising Star"])
     talent_map = {"Ultra-Veteran": 98, "Veteran": 90, "Superstar": 92, "Rising Star": 70}
@@ -92,7 +93,7 @@ inputs = {
     "seasonal_score": 85 if m_market > 1.0 else 70,
     "m_cert": m_cert,
     "m_align": 1.0,
-    "budget": budget,
+    "budget": budget if budget > 0 else 1.0, # SAFETY: Final check to prevent division by zero
     "is_franchise": False 
 }
 
@@ -108,6 +109,5 @@ if omdb:
     st.divider()
     st.subheader("Technical Analysis Data (IMDb)")
     st.write(f"**Synopsis:** {omdb.get('Plot')}")
-    # Display Actors and Genre metadata
     st.write(f"**Cast:** {omdb.get('Actors')}")
     st.write(f"**Genre:** {omdb.get('Genre')} | **Certification:** {omdb.get('Rated')}")
