@@ -1,4 +1,4 @@
-#Clde version updates with gemini
+#Clde version updates with gemini + CGPT
 
 # app.py - Corrected Version
 
@@ -66,7 +66,7 @@ st.title("South Indian Cinema Predictability Model v3i")
 
 with st.sidebar:
     st.header("Step 1: Movie Search")
-    search_query = st.text_input("Enter Title (e.g. Apex)", value="Apex")
+    search_query = st.text_input("Enter Title", value="")
     
     omdb, tmdb = None, None
     
