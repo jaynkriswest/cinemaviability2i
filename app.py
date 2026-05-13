@@ -14,7 +14,7 @@ OMDB_API_KEY = st.secrets.get("OMDB_API_KEY") or os.getenv("OMDB_API_KEY")
 TMDB_API_KEY = st.secrets.get("TMDB_API_KEY") or os.getenv("TMDB_API_KEY")
 
 st.set_page_config(page_title="v3i Real-Time Predictor", layout="wide")
-st.title("🎬 South Indian Cinema Predictability Model v3i")
+st.title("South Indian Cinema Predictability Model v3i")
 
 # 2. DATA FETCHING FUNCTION
 def fetch_movie_metadata(title):
@@ -41,7 +41,7 @@ def fetch_movie_metadata(title):
 # 3. SIDEBAR INPUTS
 with st.sidebar:
     st.header("Real-Time Search")
-    search_query = st.text_input("Enter Movie Title", value="Mana Shankara Varaprasad Garu")
+    search_query = st.text_input("Enter Movie Title", value="")
     
     omdb, tmdb = None, None
     if search_query:
@@ -67,7 +67,7 @@ with st.sidebar:
         st.warning("Manual fallback active.")
         m_cert = 1.0
         genre = "Action"
-        budget = st.number_input("Budget (Crores)", value=200.0)
+        budget = st.number_input("Budget (Crores)", value=0.0)
 
     st.header("Pillar 1: Talent")
     talent_tier = st.selectbox("Assign Talent Tier", ["Ultra-Veteran", "Veteran", "Superstar", "Rising Star"])
