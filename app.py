@@ -9,7 +9,10 @@ from dotenv import load_dotenv
 from datetime import date
 import logging
 
-# Import local modules
+# =====================================================
+# IMPORT LOCAL MODULES
+# =====================================================
+
 from data import (
     GENRE_METRICS,
     SOUTH_INDIAN_ACTORS,
@@ -18,7 +21,6 @@ from data import (
 )
 
 from formula import (
-    calculate_v3i_logic,
     calculate_detailed_prediction,
 )
 
@@ -39,129 +41,139 @@ st.set_page_config(
 # API KEYS
 # =====================================================
 
-OMDB_API_KEY = st.secrets.get("OMDB_API_KEY") or os.getenv("OMDB_API_KEY")
-TMDB_API_KEY = st.secrets.get("TMDB_API_KEY") or os.getenv("TMDB_API_KEY")
+TMDB_API_KEY = (
+    st.secrets.get("TMDB_API_KEY")
+    or os.getenv("TMDB_API_KEY")
+)
 
 # =====================================================
 # VALIDATION
 # =====================================================
-
-if not OMDB_API_KEY:
-    st.error("Missing OMDB_API_KEY in Streamlit secrets.")
-    st.stop()
 
 if not TMDB_API_KEY:
     st.error("Missing TMDB_API_KEY in Streamlit secrets.")
     st.stop()
 
 # =====================================================
-# DATA FETCHING FUNCTIONS
+# TMDB SEARCH FUNCTION
 # =====================================================
 
 def search_movies_list(query):
     """
-    Search OMDB for movies matching a query.
+    Search TMDB for movies.
     """
 
-    url = f"http://www.omdbapi.com/?s={query}&apikey={OMDB_API_KEY}"
-
     try:
-        response = requests.get(url, timeout=15)
+
+        url = (
+            "https://api.themoviedb.org/3/search/movie"
+            f"?api_key={TMDB_API_KEY}"
+            f"&query={query}"
+        )
+
+        response = requests.get(
+            url,
+            timeout=15
+        )
+
         response.raise_for_status()
 
         data = response.json()
 
-        if data.get("Response") == "True":
-            return data.get("Search", [])
+        results = []
 
-        return []
+        for movie in data.get("results", []):
+
+            release_date = movie.get("release_date", "")
+
+            year = (
+                release_date[:4]
+                if release_date
+                else "Unknown"
+            )
+
+            results.append({
+                "Title": movie.get("title", "Unknown"),
+                "Year": year,
+                "tmdbID": movie.get("id")
+            })
+
+        return results
 
     except Exception as e:
-        st.error(f"OMDB search error: {e}")
+        st.error(f"TMDB search error: {e}")
         return []
 
+# =====================================================
+# FETCH MOVIE DETAILS
+# =====================================================
 
-def fetch_detailed_data(imdb_id):
-    """
-    Fetch detailed OMDB + TMDB data.
-    """
+def fetch_detailed_data(tmdb_id):
 
     try:
-        # =====================================================
-        # OMDB DETAILS
-        # =====================================================
 
-        omdb_url = f"http://www.omdbapi.com/?i={imdb_id}&apikey={OMDB_API_KEY}"
-
-        omdb_response = requests.get(omdb_url, timeout=15)
-        omdb_response.raise_for_status()
-
-        omdb = omdb_response.json()
-
-        title = omdb.get("Title", "")
-
-        if not title:
-            return omdb, {}
-
-        # =====================================================
-        # TMDB SEARCH
-        # =====================================================
-
-        tmdb_search_url = (
-            f"https://api.themoviedb.org/3/search/movie"
-            f"?api_key={TMDB_API_KEY}&query={title}"
+        url = (
+            f"https://api.themoviedb.org/3/movie/{tmdb_id}"
+            f"?api_key={TMDB_API_KEY}"
+            f"&append_to_response=credits"
         )
 
-        tmdb_search_response = requests.get(
-            tmdb_search_url,
+        response = requests.get(
+            url,
             timeout=15
         )
 
-        tmdb_search_response.raise_for_status()
+        response.raise_for_status()
 
-        tmdb_search = tmdb_search_response.json()
+        tmdb = response.json()
 
-        tmdb_data = {}
+        poster_path = tmdb.get("poster_path")
 
-        if tmdb_search.get("results"):
+        poster_url = None
 
-            year = omdb.get("Year", "")[:4]
-
-            # Try matching by year
-            match = next(
-                (
-                    movie
-                    for movie in tmdb_search["results"]
-                    if movie.get("release_date", "").startswith(year)
-                ),
-                tmdb_search["results"][0]
+        if poster_path:
+            poster_url = (
+                f"https://image.tmdb.org/t/p/w500"
+                f"{poster_path}"
             )
 
-            movie_id = match.get("id")
+        genres = ", ".join(
+            [
+                genre["name"]
+                for genre in tmdb.get("genres", [])
+            ]
+        )
 
-            if movie_id:
+        cast_names = ", ".join(
+            [
+                cast["name"]
+                for cast in tmdb.get(
+                    "credits",
+                    {}
+                ).get("cast", [])[:5]
+            ]
+        )
 
-                tmdb_detail_url = (
-                    f"https://api.themoviedb.org/3/movie/{movie_id}"
-                    f"?api_key={TMDB_API_KEY}"
-                    f"&append_to_response=credits"
-                )
+        movie_data = {
+            "Title": tmdb.get("title", "Unknown"),
+            "Year": tmdb.get(
+                "release_date",
+                ""
+            )[:4],
+            "Genre": genres,
+            "Plot": tmdb.get(
+                "overview",
+                "No overview available."
+            ),
+            "Poster": poster_url,
+            "Actors": cast_names,
+        }
 
-                tmdb_response = requests.get(
-                    tmdb_detail_url,
-                    timeout=15
-                )
-
-                tmdb_response.raise_for_status()
-
-                tmdb_data = tmdb_response.json()
-
-        return omdb, tmdb_data
+        return movie_data, tmdb
 
     except Exception as e:
-        st.error(f"Movie detail fetch error: {e}")
+        st.error(f"TMDB detail fetch error: {e}")
         return None, None
-
 
 # =====================================================
 # APP TITLE
@@ -182,17 +194,25 @@ with st.sidebar:
         value="Apex"
     )
 
-    omdb = None
-    tmdb = None
+    movie_data = None
+    tmdb_data = None
+
+    # =====================================================
+    # SEARCH RESULTS
+    # =====================================================
 
     if search_query:
 
-        search_results = search_movies_list(search_query)
+        search_results = search_movies_list(
+            search_query
+        )
 
         if search_results:
 
             options = {
-                f"{movie['Title']} ({movie['Year']})": movie["imdbID"]
+                f"{movie['Title']} ({movie['Year']})":
+                movie["tmdbID"]
+
                 for movie in search_results
             }
 
@@ -202,8 +222,11 @@ with st.sidebar:
             )
 
             if selected_label:
-                omdb, tmdb = fetch_detailed_data(
-                    options[selected_label]
+
+                movie_data, tmdb_data = (
+                    fetch_detailed_data(
+                        options[selected_label]
+                    )
                 )
 
         else:
@@ -211,18 +234,18 @@ with st.sidebar:
 
     st.divider()
 
-    st.header("Step 3: Analyze Pillars")
+    # =====================================================
+    # ANALYSIS SECTION
+    # =====================================================
 
-    # =====================================================
-    # DEFAULT GENRE
-    # =====================================================
+    st.header("Step 3: Analyze Pillars")
 
     default_genre = "Action"
 
-    if omdb:
+    if movie_data:
 
         raw_genre = (
-            omdb.get("Genre", "Action")
+            movie_data.get("Genre", "Action")
             .split(",")[0]
             .strip()
         )
@@ -233,12 +256,10 @@ with st.sidebar:
     genre = st.selectbox(
         "Genre",
         list(GENRE_METRICS.keys()),
-        index=list(GENRE_METRICS.keys()).index(default_genre)
+        index=list(GENRE_METRICS.keys()).index(
+            default_genre
+        )
     )
-
-    # =====================================================
-    # ACTOR / DIRECTOR
-    # =====================================================
 
     actor_key = st.selectbox(
         "Lead Actor",
@@ -250,20 +271,14 @@ with st.sidebar:
         list(DIRECTORS.keys())
     )
 
-    # =====================================================
-    # RELEASE DATE
-    # =====================================================
-
     release_date = st.date_input(
         "Release Date",
         value=date(2026, 1, 12)
     )
 
-    # =====================================================
-    # CLASH
-    # =====================================================
-
-    has_clash = st.checkbox("Superstar Clash?")
+    has_clash = st.checkbox(
+        "Superstar Clash?"
+    )
 
     # =====================================================
     # BUDGET
@@ -271,27 +286,37 @@ with st.sidebar:
 
     tmdb_budget = 0
 
-    if tmdb:
-        tmdb_budget = tmdb.get("budget", 0) / 10_000_000
+    if tmdb_data:
+        tmdb_budget = (
+            tmdb_data.get("budget", 0)
+            / 10_000_000
+        )
 
     budget = st.number_input(
         "Budget (Crores)",
         min_value=1.0,
-        value=float(tmdb_budget) if tmdb_budget > 0 else 100.0
+        value=(
+            float(tmdb_budget)
+            if tmdb_budget > 0
+            else 100.0
+        )
     )
 
 # =====================================================
-# MAIN CALCULATION
+# MAIN DISPLAY
 # =====================================================
 
-if omdb:
+if movie_data:
 
-    market_multiplier = SEASONAL_MULTIPLIERS.get(
-        release_date.month,
-        1.0
+    market_multiplier = (
+        SEASONAL_MULTIPLIERS.get(
+            release_date.month,
+            1.0
+        )
     )
 
     calc_inputs = {
+
         "talent_score": (
             SOUTH_INDIAN_ACTORS[actor_key]["score"]
             + DIRECTORS[director_key]["score"]
@@ -303,23 +328,33 @@ if omdb:
 
         "has_clash": has_clash,
 
-        "content_score": GENRE_METRICS[genre]["base_score"],
+        "content_score": (
+            GENRE_METRICS[genre]["base_score"]
+        ),
 
         "viral_score": 75,
 
         "seasonal_score": (
-            85 if market_multiplier > 1.0 else 70
+            85
+            if market_multiplier > 1.0
+            else 70
         ),
 
         "m_cert": 1.0,
 
-        "budget": budget if budget > 0 else 1.0,
+        "budget": (
+            budget
+            if budget > 0
+            else 1.0
+        ),
     }
 
-    report = calculate_detailed_prediction(calc_inputs)
+    report = calculate_detailed_prediction(
+        calc_inputs
+    )
 
     # =====================================================
-    # METRICS
+    # TOP METRICS
     # =====================================================
 
     col1, col2, col3 = st.columns(3)
@@ -342,38 +377,46 @@ if omdb:
     st.divider()
 
     # =====================================================
-    # MOVIE DISPLAY
+    # MOVIE INFO
     # =====================================================
 
     left_col, right_col = st.columns([1, 2])
 
     with left_col:
 
-        poster = omdb.get("Poster")
+        poster = movie_data.get("Poster")
 
-        if poster and poster != "N/A":
-            st.image(poster)
+        if poster:
+            st.image(
+                poster,
+                use_container_width=True
+            )
 
     with right_col:
 
         st.subheader(
-            f"{omdb.get('Title')} ({omdb.get('Year')})"
+            f"{movie_data.get('Title')} "
+            f"({movie_data.get('Year')})"
         )
 
         st.write(
-            f"**Genre:** {omdb.get('Genre', 'N/A')}"
+            f"**Genre:** "
+            f"{movie_data.get('Genre', 'N/A')}"
         )
 
         st.write(
-            f"**Synopsis:** {omdb.get('Plot', 'N/A')}"
+            f"**Synopsis:** "
+            f"{movie_data.get('Plot', 'N/A')}"
         )
 
         st.write(
-            f"**Cast:** {omdb.get('Actors', 'N/A')}"
+            f"**Cast:** "
+            f"{movie_data.get('Actors', 'N/A')}"
         )
 
         st.info(
-            f"Risk Level: {report['risk_level']}"
+            f"Risk Level: "
+            f"{report['risk_level']}"
         )
 
     # =====================================================
@@ -384,10 +427,19 @@ if omdb:
 
     st.subheader("Prediction Breakdown")
 
-    breakdown = report.get("breakdown", {})
+    breakdown = report.get(
+        "breakdown",
+        {}
+    )
 
     for key, value in breakdown.items():
-        st.write(f"**{key.title()} Score:** {value}")
+
+        st.write(
+            f"**{key.title()} Score:** {value}"
+        )
 
 else:
-    st.info("Search for a movie to begin.")
+
+    st.info(
+        "Search for a movie to begin."
+    )
