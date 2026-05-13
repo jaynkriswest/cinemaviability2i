@@ -255,166 +255,202 @@ with prediction_col:
         value=100.0
     )
 
-    market_multiplier = (
-        SEASONAL_MULTIPLIERS.get(
-            release_date.month,
-            1.0
-        )
-    )
-
-    calc_inputs = {
-
-        "talent_score": (
-            SOUTH_INDIAN_ACTORS[actor_key]["score"]
-            + DIRECTORS[director_key]["score"]
-        ) / 2,
-
-        "market_base": 85,
-
-        "market_multiplier": market_multiplier,
-
-        "has_clash": has_clash,
-
-        "content_score": (
-            GENRE_METRICS[genre]["base_score"]
-        ),
-
-        "viral_score": 75,
-
-        "seasonal_score": (
-            85 if market_multiplier > 1.0
-            else 70
-        ),
-
-        "m_cert": 1.0,
-
-        "budget": budget,
-    }
-
-    report = calculate_detailed_prediction(
-        calc_inputs
-    )
-
-    st.subheader("Prediction Results")
-
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric(
-        "Predictability",
-        f"{report['predictability_score']}%"
-    )
-
-    c2.metric(
-        "Revenue",
-        f"₹{report['revenue_estimate']} Cr"
-    )
-
-    c3.metric(
-        "ROI",
-        f"{report['roi_percentage']}%"
-    )
-
     # =====================================================
-    # FUTURE FILM MATCHING
+    # BUTTONS
     # =====================================================
 
-    if movie_synopsis:
+    run_prediction = st.button(
+        "Run Prediction",
+        use_container_width=True
+    )
 
-        st.markdown("---")
+    reset_prediction = st.button(
+        "Reset",
+        use_container_width=True
+    )
 
-        st.subheader(
-            "Closest Historical Matches"
-        )
+    if reset_prediction:
 
-        historical_matches = (
-            search_movies_by_synopsis(
-                movie_synopsis,
-                TMDB_API_KEY
+        st.session_state.clear()
+
+        st.rerun()
+
+    # =====================================================
+    # PREDICTION ENGINE
+    # =====================================================
+
+    if run_prediction:
+
+        market_multiplier = (
+            SEASONAL_MULTIPLIERS.get(
+                release_date.month,
+                1.0
             )
         )
 
-        for movie in historical_matches:
+        calc_inputs = {
 
-            likeness = (
-                calculate_future_likeness(
+            "talent_score": (
+                SOUTH_INDIAN_ACTORS[actor_key]["score"]
+                + DIRECTORS[director_key]["score"]
+            ) / 2,
+
+            "market_base": 85,
+
+            "market_multiplier": market_multiplier,
+
+            "has_clash": has_clash,
+
+            "content_score": (
+                GENRE_METRICS[genre]["base_score"]
+            ),
+
+            "viral_score": 75,
+
+            "seasonal_score": (
+                85 if market_multiplier > 1.0
+                else 70
+            ),
+
+            "m_cert": 1.0,
+
+            "budget": budget,
+        }
+
+        report = calculate_detailed_prediction(
+            calc_inputs
+        )
+
+        # =====================================================
+        # PREDICTION RESULTS
+        # =====================================================
+
+        st.subheader("Prediction Results")
+
+        c1, c2, c3 = st.columns(3)
+
+        c1.metric(
+            "Predictability",
+            f"{report['predictability_score']}%"
+        )
+
+        c2.metric(
+            "Revenue",
+            f"₹{report['revenue_estimate']} Cr"
+        )
+
+        c3.metric(
+            "ROI",
+            f"{report['roi_percentage']}%"
+        )
+
+        # =====================================================
+        # FUTURE FILM MATCHING
+        # =====================================================
+
+        if movie_synopsis:
+
+            st.markdown("---")
+
+            st.subheader(
+                "Closest Historical Matches"
+            )
+
+            historical_matches = (
+                search_movies_by_synopsis(
                     movie_synopsis,
-                    genre,
-                    movie
-                )
-            )
-
-            detailed_movie = (
-                fetch_full_movie_details(
-                    movie["id"],
                     TMDB_API_KEY
                 )
             )
 
-            performance = (
-                classify_movie_success(
-                    detailed_movie
-                )
-            )
+            if not historical_matches:
 
-            st.markdown(
-                f"### {movie['title']}"
-            )
-
-            st.write(
-                f"Likeness Score: "
-                f"{likeness}%"
-            )
-
-            st.write(
-                f"Performance: "
-                f"{performance}"
-            )
-
-            # =====================================================
-            # SUCCESS ANALYSIS
-            # =====================================================
-
-            success_reasons = (
-                analyze_success_reasons(
-                    detailed_movie
-                )
-            )
-
-            if success_reasons:
-
-                st.success(
-                    "Why It Worked"
+                st.warning(
+                    "No historical matches found."
                 )
 
-                for reason in success_reasons:
+            for movie in historical_matches:
 
-                    st.write(
-                        f"• {reason}"
+                likeness = (
+                    calculate_future_likeness(
+                        movie_synopsis,
+                        genre,
+                        movie
+                    )
+                )
+
+                detailed_movie = (
+                    fetch_full_movie_details(
+                        movie["id"],
+                        TMDB_API_KEY
+                    )
+                )
+
+                performance = (
+                    classify_movie_success(
+                        detailed_movie
+                    )
+                )
+
+                st.markdown(
+                    f"### {movie['title']}"
+                )
+
+                st.write(
+                    f"Likeness Score: "
+                    f"{likeness}%"
+                )
+
+                st.write(
+                    f"Performance: "
+                    f"{performance}"
+                )
+
+                # =====================================================
+                # SUCCESS ANALYSIS
+                # =====================================================
+
+                success_reasons = (
+                    analyze_success_reasons(
+                        detailed_movie
+                    )
+                )
+
+                if success_reasons:
+
+                    st.success(
+                        "Why It Worked"
                     )
 
-            # =====================================================
-            # FAILURE ANALYSIS
-            # =====================================================
+                    for reason in success_reasons:
 
-            failure_reasons = (
-                analyze_failure_reasons(
-                    detailed_movie
+                        st.write(
+                            f"• {reason}"
+                        )
+
+                # =====================================================
+                # FAILURE ANALYSIS
+                # =====================================================
+
+                failure_reasons = (
+                    analyze_failure_reasons(
+                        detailed_movie
+                    )
                 )
-            )
 
-            if failure_reasons:
+                if failure_reasons:
 
-                st.error(
-                    "Why It Failed"
-                )
-
-                for reason in failure_reasons:
-
-                    st.write(
-                        f"• {reason}"
+                    st.error(
+                        "Why It Failed"
                     )
 
-            st.markdown("---")
+                    for reason in failure_reasons:
+
+                        st.write(
+                            f"• {reason}"
+                        )
+
+                st.markdown("---")
 
 # =====================================================
 # RIGHT SIDE — MOVIE SEARCH
