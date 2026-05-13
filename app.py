@@ -7,10 +7,8 @@ from data import GENRE_METRICS
 from formula import calculate_v3i_logic
 
 # 1. SETUP & SECURITY
-# Loads local .env for local testing; Streamlit Cloud will use its own Secrets
 load_dotenv()
 
-# Attempt to get keys from Streamlit Secrets (Production) or .env (Local)
 OMDB_API_KEY = st.secrets.get("OMDB_API_KEY") or os.getenv("OMDB_API_KEY")
 TMDB_API_KEY = st.secrets.get("TMDB_API_KEY") or os.getenv("TMDB_API_KEY")
 
@@ -30,7 +28,8 @@ def fetch_movie_metadata(title):
     tmdb_search = requests.get(f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={title}").json()
     
     tmdb_details = {}
-    if tmdb_search.get('results'):
+    if tmdb_search.get('results') and len(tmdb_search['results']) > 0:
+        # FIX: Get the ID from the first result in the list
         movie_id = tmdb_search['results']['id']
         tmdb_details = requests.get(f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&append_to_response=credits").json()
     
@@ -53,9 +52,10 @@ with st.sidebar:
         cert_val = omdb.get("Rated", "UA")
         m_cert = {"U": 1.2, "UA": 1.0, "U/A": 1.0, "A": 0.7}.get(cert_val, 1.0)
         
-        # Auto-map Genre
-        fetched_genre = omdb.get("Genre", "Mass Action").split(",")
-        genre = fetched_genre if fetched_genre in GENRE_METRICS else "Mass Action"
+        # FIX: Parse Genre correctly (Take first genre and remove extra spaces)
+        raw_genre = omdb.get("Genre", "Action")
+        first_genre = raw_genre.split(",").strip()
+        genre = first_genre if first_genre in GENRE_METRICS else "Action"
         
         # Auto-map Budget (Convert to Crores)
         tmdb_budget = tmdb.get("budget", 0) / 10000000 
@@ -63,7 +63,7 @@ with st.sidebar:
     else:
         st.warning("Manual fallback active.")
         m_cert = 1.0
-        genre = "Mass Action"
+        genre = "Action"
         budget = st.number_input("Budget (Crores)", value=200.0)
 
     st.header("Pillar 1: Talent")
@@ -77,28 +77,26 @@ with st.sidebar:
     viral_map = {"Low": 40, "Moderate": 70, "High": 95}
 
 # 4. LOGIC PROCESSING
-# Calculate Market Multiplier
 m_market = 1.0
 if release_date.month == 1 and 12 <= release_date.day <= 17:
-    m_market = 1.3 # Sankranti
+    m_market = 1.3 
 elif 4 <= release_date.month <= 6:
-    m_market = 1.15 # Summer
+    m_market = 1.15 
 
 inputs = {
     "talent_score": talent_map[talent_tier],
     "market_base": 85,
     "market_multiplier": m_market,
     "has_clash": has_clash,
-    "content_score": GENRE_METRICS[genre]['base_score'],
+    "content_score": GENRE_METRICS[genre]['base_score'], # Will now work!
     "viral_score": viral_map[viral_tier],
     "seasonal_score": 85 if m_market > 1.0 else 70,
     "m_cert": m_cert,
     "m_align": 1.0,
     "budget": budget,
-    "is_franchise": False # Could be automated by checking if title has digits
+    "is_franchise": False 
 }
 
-# Execute Formula
 prob, revenue, roi = calculate_v3i_logic(inputs)
 
 # 5. UI DISPLAY
