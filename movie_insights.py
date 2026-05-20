@@ -1,462 +1,160 @@
 import requests
-from difflib import SequenceMatcher
+import logging
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
-# =====================================================
-# SEARCH MOVIES USING FUTURE SYNOPSIS
-# =====================================================
+logger = logging.getLogger(__name__)
 
-def search_movies_by_synopsis(
-    synopsis,
-    api_key
-):
-
+def fetch_full_movie_details(title: str, api_key: str) -> dict:
+    """
+    Fetch full movie details from TMDB.
+    """
+    if not api_key:
+        return {}
+    
+    search_url = "https://api.themoviedb.org/3/search/movie"
+    params = {"api_key": api_key, "query": title, "region": "IN"}
+    
     try:
-
-        synopsis_lower = synopsis.lower()
-
-        # =================================================
-        # SMART KEYWORD DETECTION
-        # =================================================
-
-        keywords = []
-
-        keyword_map = {
-
-            "superhero": [
-                "superhero",
-                "powers",
-                "villain",
-                "hero"
-            ],
-
-            "action": [
-                "fight",
-                "violence",
-                "gang",
-                "revenge",
-                "mass",
-                "criminal",
-                "corruption"
-            ],
-
-            "horror": [
-                "ghost",
-                "haunted",
-                "spirit",
-                "supernatural"
-            ],
-
-            "sports": [
-                "athlete",
-                "sports",
-                "cricket",
-                "football",
-                "boxing"
-            ],
-
-            "sci-fi": [
-                "robot",
-                "ai",
-                "technology",
-                "future",
-                "space",
-                "alien"
-            ],
-
-            "fantasy": [
-                "kingdom",
-                "magic",
-                "warrior",
-                "ancient"
-            ]
-        }
-
-        # =================================================
-        # DETECT KEYWORDS FROM SYNOPSIS
-        # =================================================
-
-        for category, words in keyword_map.items():
-
-            for word in words:
-
-                if word in synopsis_lower:
-
-                    keywords.append(word)
-
-        # =================================================
-        # FALLBACK KEYWORDS
-        # =================================================
-
-        if not keywords:
-
-            keywords = [
-                word for word in synopsis.split()
-                if len(word) > 5
-            ][:5]
-
-        # =================================================
-        # FINAL QUERY
-        # =================================================
-
-        query = " ".join(keywords)
-
-        # Safety fallback
-        if not query:
-            query = synopsis[:40]
-
-        # Debugging
-        print("TMDB QUERY:", query)
-
-        # =================================================
-        # TMDB SEARCH
-        # =================================================
-
-        url = (
-            "https://api.themoviedb.org/3/search/movie"
-            f"?api_key={api_key}"
-            f"&query={query}"
-        )
-
-        response = requests.get(
-            url,
-            timeout=15
-        )
-
+        response = requests.get(search_url, params=params, timeout=5)
         response.raise_for_status()
-
         data = response.json()
-
-        return data.get("results", [])[:5]
-
+        
+        if data.get("results"):
+            movie_id = data["results"]["id"]
+            details_url = f"https://api.themoviedb.org/3/movie/{movie_id}"
+            details_params = {"api_key": api_key, "append_to_response": "credits,keywords"}
+            
+            det_response = requests.get(details_url, params=details_params, timeout=5)
+            det_response.raise_for_status()
+            return det_response.json()
     except Exception as e:
+        logger.error(f"Error fetching detailed movie data: {str(e)}")
+        
+    return {}
 
-        print("TMDB SEARCH ERROR:", e)
-
+def search_movies_by_synopsis(synopsis: str, genre_name: str, language_code: str, tmdb_api_key: str) -> list:
+    """
+    Finds historical archetype films from TMDB based on genre/language, 
+    then applies TF-IDF and Cosine Similarity to calculate a narrative Likeness Score.
+    """
+    if not tmdb_api_key or not synopsis:
         return []
 
-# =====================================================
-# FETCH FULL MOVIE DETAILS
-# =====================================================
+    # Map application genre keys to TMDB Genre IDs
+    tmdb_genre_map = {
+        "Action": 28, "Comedy": 35, "Drama": 18, "Thriller": 53, 
+        "Romance": 10749, "Horror": 27, "Sci-Fi": 878, "Mythology": 14, "Biopic": 36
+    }
+    genre_id = tmdb_genre_map.get(genre_name, 28)
 
-def fetch_full_movie_details(
-    movie_id,
-    api_key
-):
+    # Core historical discovery pool targeting Indian Market context
+    discover_url = "https://api.themoviedb.org/3/discover/movie"
+    params = {
+        "api_key": tmdb_api_key,
+        "region": "IN",
+        "with_original_language": language_code,
+        "with_genres": genre_id,
+        "sort_by": "revenue.desc",  # Focus comparison pool on financially validated archetypes
+        "page": 1
+    }
 
     try:
-
-        url = (
-            f"https://api.themoviedb.org/3/movie/{movie_id}"
-            f"?api_key={api_key}"
-        )
-
-        response = requests.get(
-            url,
-            timeout=15
-        )
-
+        response = requests.get(discover_url, params=params, timeout=5)
         response.raise_for_status()
+        historical_pool = response.json().get("results", [])
 
-        return response.json()
+        if not historical_pool:
+            # Fallback if specific regional language filter is too restrictive
+            params.pop("with_original_language")
+            response = requests.get(discover_url, params=params, timeout=5)
+            historical_pool = response.json().get("results", [])
+
+        if not historical_pool:
+            return []
+
+        # Construct corpus for Vectorizer Matrix
+        documents = [synopsis]  # Element is the target project text
+        movie_metadata_map = []
+
+        for movie in historical_pool:
+            overview = movie.get("overview")
+            if overview and len(overview.strip()) > 20:
+                documents.append(overview)
+                movie_metadata_map.append(movie)
+
+        if len(documents) < 2:
+            return []
+
+        # Vector Engine Execution (TF-IDF NLP Analysis)
+        vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 2))
+        tfidf_matrix = vectorizer.fit_transform(documents)
+
+        # Vector comparison: Input text [0:1] evaluated against all pool matrices [1:]
+        similarity_scores = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:]).flatten()
+
+        compiled_comps = []
+        for idx, score in enumerate(similarity_scores):
+            raw_percent = float(score) * 100
+            
+            # Normalize and establish an industry baseline floor (base alignment match)
+            likeness_score = min(round(raw_percent * 2.5 + 15.0, 1), 98.5)
+            if likeness_score < 25.0:
+                likeness_score = round(25.0 + (raw_percent * 0.5), 1)
+
+            matched_movie = movie_metadata_map[idx]
+            compiled_comps.append({
+                "title": matched_movie.get("title"),
+                "release_year": matched_movie.get("release_date", "####")[:4],
+                "historical_overview": matched_movie.get("overview"),
+                "likeness_score": likeness_score
+            })
+
+        # Return top 3 strongest historical structural comps
+        compiled_comps = sorted(compiled_comps, key=lambda x: x["likeness_score"], reverse=True)
+        return compiled_comps[:3]
 
     except Exception as e:
+        logger.error(f"Error executing synopsis likeness engine: {str(e)}")
+        return []
 
-        print("DETAIL FETCH ERROR:", e)
+def calculate_future_likeness(synopsis: str, historical_overviews: list) -> float:
+    """Helper component tracking raw baseline structural variance calculations."""
+    if not synopsis or not historical_overviews:
+        return 0.0
+    try:
+        corpus = [synopsis] + historical_overviews
+        vectorizer = TfidfVectorizer(stop_words='english')
+        tfidf = vectorizer.fit_transform(corpus)
+        scores = cosine_similarity(tfidf[0:1], tfidf[1:]).flatten()
+        return float(scores.mean() * 100)
+    except:
+        return 0.0
 
-        return {}
+def classify_movie_success(predictability_score: float, roi_percentage: float) -> str:
+    if predictability_score >= 85 and roi_percentage >= 50:
+        return "High Probability Blockbuster Equity"
+    elif predictability_score >= 65 and roi_percentage >= 0:
+        return "Stable Break-Even / Controlled Risk Profile"
+    else:
+        return "High Capital Risk Contingency"
 
-# =====================================================
-# FUTURE FILM LIKENESS SCORE
-# =====================================================
-
-def calculate_future_likeness(
-    future_synopsis,
-    future_genre,
-    historical_movie
-):
-
-    score = 0
-
-    # =====================================================
-    # SYNOPSIS SIMILARITY
-    # =====================================================
-
-    overview = historical_movie.get(
-        "overview",
-        ""
-    )
-
-    synopsis_similarity = (
-        SequenceMatcher(
-            None,
-            future_synopsis.lower(),
-            overview.lower()
-        ).ratio()
-    )
-
-    score += synopsis_similarity * 70
-
-    # =====================================================
-    # POPULARITY WEIGHTING
-    # =====================================================
-
-    popularity = historical_movie.get(
-        "popularity",
-        0
-    )
-
-    score += min(popularity / 10, 15)
-
-    # =====================================================
-    # VOTE AVERAGE
-    # =====================================================
-
-    vote_average = historical_movie.get(
-        "vote_average",
-        0
-    )
-
-    score += vote_average
-
-    # =====================================================
-    # FINAL SCORE
-    # =====================================================
-
-    final_score = round(
-        min(score, 100),
-        1
-    )
-
-    return final_score
-
-# =====================================================
-# PERFORMANCE CLASSIFICATION
-# =====================================================
-
-def classify_movie_success(movie):
-
-    revenue = movie.get(
-        "revenue",
-        0
-    )
-
-    budget = movie.get(
-        "budget",
-        1
-    )
-
-    if budget <= 0:
-        return "Unknown"
-
-    roi = revenue / budget
-
-    if roi >= 3:
-        return "Blockbuster"
-
-    elif roi >= 1.5:
-        return "Hit"
-
-    elif roi >= 1:
-        return "Average"
-
-    return "Flop"
-
-# =====================================================
-# SUCCESS ANALYSIS
-# =====================================================
-
-def analyze_success_reasons(movie):
-
+def analyze_success_reasons(inputs: dict) -> list:
     reasons = []
-
-    popularity = movie.get(
-        "popularity",
-        0
-    )
-
-    vote_average = movie.get(
-        "vote_average",
-        0
-    )
-
-    runtime = movie.get(
-        "runtime",
-        0
-    )
-
-    revenue = movie.get(
-        "revenue",
-        0
-    )
-
-    budget = movie.get(
-        "budget",
-        1
-    )
-
-    roi = revenue / max(budget, 1)
-
-    # =====================================================
-    # POPULARITY
-    # =====================================================
-
-    if popularity > 80:
-
-        reasons.append(
-            "Strong audience engagement and awareness."
-        )
-
-    # =====================================================
-    # ROI
-    # =====================================================
-
-    if roi > 2:
-
-        reasons.append(
-            "Excellent commercial ROI efficiency."
-        )
-
-    # =====================================================
-    # RATINGS
-    # =====================================================
-
-    if vote_average > 7:
-
-        reasons.append(
-            "Positive audience reception and ratings."
-        )
-
-    # =====================================================
-    # RUNTIME
-    # =====================================================
-
-    if runtime < 170 and runtime > 0:
-
-        reasons.append(
-            "Audience-friendly runtime supported theatrical performance."
-        )
-
-    # =====================================================
-    # GENRE ANALYSIS
-    # =====================================================
-
-    genres = [
-        genre["name"]
-        for genre in movie.get(
-            "genres",
-            []
-        )
-    ]
-
-    if "Action" in genres:
-
-        reasons.append(
-            "Strong mass-market action appeal."
-        )
-
-    if "Family" in genres:
-
-        reasons.append(
-            "Broad family audience accessibility."
-        )
-
-    if "Adventure" in genres:
-
-        reasons.append(
-            "Large-scale adventure appeal increased audience reach."
-        )
-
-    if "Science Fiction" in genres:
-
-        reasons.append(
-            "High-concept sci-fi appeal attracted curiosity."
-        )
-
+    if inputs.get("talent_score", 0) >= 85:
+        reasons.append("Elite historical talent index anchor drastically lowers distribution risk windows.")
+    if inputs.get("is_franchise"):
+        reasons.append("Sequel IP leverage provides built-in minimum opening structural guarantees.")
+    if inputs.get("market_multiplier", 1.0) >= 1.2:
+        reasons.append("Wide Pan-India scaling structure offsets reliance on single state performance variables.")
     return reasons
 
-# =====================================================
-# FAILURE ANALYSIS
-# =====================================================
-
-def analyze_failure_reasons(movie):
-
+def analyze_failure_reasons(inputs: dict) -> list:
     reasons = []
-
-    popularity = movie.get(
-        "popularity",
-        0
-    )
-
-    runtime = movie.get(
-        "runtime",
-        0
-    )
-
-    revenue = movie.get(
-        "revenue",
-        0
-    )
-
-    budget = movie.get(
-        "budget",
-        1
-    )
-
-    roi = revenue / max(budget, 1)
-
-    # =====================================================
-    # WEAK ROI
-    # =====================================================
-
-    if roi < 1:
-
-        reasons.append(
-            "Weak commercial ROI performance."
-        )
-
-    # =====================================================
-    # LOW POPULARITY
-    # =====================================================
-
-    if popularity < 40:
-
-        reasons.append(
-            "Low audience engagement and buzz."
-        )
-
-    # =====================================================
-    # LONG RUNTIME
-    # =====================================================
-
-    if runtime > 180:
-
-        reasons.append(
-            "Excessive runtime may reduce repeat viewership."
-        )
-
-    # =====================================================
-    # HIGH BUDGET RISK
-    # =====================================================
-
-    if budget > 250000000:
-
-        reasons.append(
-            "High production budget increased financial risk."
-        )
-
-    # =====================================================
-    # LOW RATINGS
-    # =====================================================
-
-    vote_average = movie.get(
-        "vote_average",
-        0
-    )
-
-    if vote_average < 5:
-
-        reasons.append(
-            "Weak audience reception and ratings."
-        )
-
+    if inputs.get("has_clash"):
+        reasons.append("Market Screen saturation collision (Clash) severely diminishes early theater slot retention capacity.")
+    if inputs.get("m_cert", 1.0) <= 0.8:
+        reasons.append("Adult ('A') certification penalty creates a significant family audience block constraint.")
+    if inputs.get("budget", 0) > 150:
+        reasons.append("Extremely high capital exposure ceiling demands multi-region crossover metrics just to achieve par break-even.")
     return reasons
