@@ -77,17 +77,16 @@ GENRE_DISPLAY_MAP = {
 }
 
 # =====================================================
-# LAYOUT STRUCTURE RATIO DEFINITION (Side-By-Side Split)
+# LAYOUT STRUCTURE
 # =====================================================
 
 st.title("South Indian Cinema Predictability Model v5")
-st.markdown("Production-grade ROI prediction engine featuring structural narrative likeness comparisons")
 st.divider()
 
 prediction_col, search_col = st.columns([1.2, 1])
 
 # =====================================================
-# LEFT PANEL: PREDICTABILITY ENGINE INPUTS & PILLARS
+# LEFT PANEL: PREDICTABILITY ENGINE
 # =====================================================
 
 with prediction_col:
@@ -100,202 +99,78 @@ with prediction_col:
     budget = st.number_input("Budget Exposure Ceiling (INR Crores)", min_value=1.0, max_value=600.0, value=150.0, step=10.0)
     release_date = st.date_input("Target Release Schedule Date", value=date(2026, 1, 1))
     
-    has_clash = st.checkbox("Holiday Release Clashes / Competition Constraints")
-    is_franchise = st.checkbox("Franchise / IP Sequel Capitalization Model")
+    has_clash = st.checkbox("Holiday Release Clashes")
+    is_franchise = st.checkbox("Franchise / IP Sequel")
     
-    censor_rating = st.radio("Censor Allocation Multiplier Status", options=["U", "UA", "A"], index=1)
-    viral_hype = st.select_slider("Promotional Viral Traction Track", options=["Low", "Moderate", "High"], value="Moderate")
-    marketing_alignment = st.slider("Marketing Messaging Core Consistency Floor", min_value=0.8, max_value=1.0, value=0.95, step=0.01)
+    censor_rating = st.radio("Censor Allocation", options=["U", "UA", "A"], index=1)
+    viral_hype = st.select_slider("Promotional Viral Traction", options=["Low", "Moderate", "High"], value="Moderate")
+    marketing_alignment = st.slider("Marketing Consistency", min_value=0.8, max_value=1.0, value=0.95, step=0.01)
 
-    future_synopsis_text = st.text_area(
-        "Future Script Synopsis/Treatment (For Similarity Processing)",
-        value="A dynamic protagonist works within an underground network, taking on powerful elements to restore equilibrium and rescue hostages."
-    )
+    future_synopsis_text = st.text_area("Future Script Synopsis", value="A dynamic protagonist works within an underground network...")
 
     if st.button("Run Analytics Engine Pipeline", type="primary", use_container_width=True):
-        actor_key = ACTOR_DISPLAY_MAP[actor_label]
-        director_key = DIRECTOR_DISPLAY_MAP[director_label]
-        genre_key = GENRE_DISPLAY_MAP[genre_label]
-        
-        actor_score = SOUTH_INDIAN_ACTORS[actor_key]["score"]
-        director_score = DIRECTORS[director_key]["score"]
-        
-        talent_score = (actor_score * 0.6) + (director_score * 0.4)
-        content_score = GENRE_METRICS[genre_key]["base_score"]
-        
-        month = release_date.month
-        seasonal_score = min(85 * SEASONAL_MULTIPLIERS.get(month, 1.0), 100)
-        viral_score = {"Low": 50, "Moderate": 70, "High": 90}[viral_hype]
-        m_cert = {"U": 1.2, "UA": 1.0, "A": 0.7}[censor_rating]
+        actor_score = SOUTH_INDIAN_ACTORS[ACTOR_DISPLAY_MAP[actor_label]]["score"]
+        director_score = DIRECTORS[DIRECTOR_DISPLAY_MAP[director_label]]["score"]
         
         inputs = {
-            "talent_score": talent_score, "market_base": 85, "market_multiplier": 1.0,
-            "has_clash": has_clash, "content_score": content_score, "viral_score": viral_score,
-            "seasonal_score": seasonal_score, "m_cert": m_cert, "m_align": marketing_alignment,
-            "budget": budget, "is_franchise": is_franchise
+            "talent_score": (actor_score * 0.6) + (director_score * 0.4),
+            "content_score": GENRE_METRICS[GENRE_DISPLAY_MAP[genre_label]]["base_score"],
+            "viral_score": {"Low": 50, "Moderate": 70, "High": 90}[viral_hype],
+            "m_cert": {"U": 1.2, "UA": 1.0, "A": 0.7}[censor_rating],
+            "budget": budget, "has_clash": has_clash, "is_franchise": is_franchise,
+            "m_align": marketing_alignment
         }
         
         pred = calculate_detailed_prediction(inputs)
-        
-        st.divider()
-        st.subheader("Engine Valuation Metrics Output")
-        
+        st.subheader("Engine Valuation Metrics")
         m1, m2, m3 = st.columns(3)
-        m1.metric("Predictability Score Index", f"{pred['predictability_score']:.1f}%")
-        m2.metric("Gross Revenue Projection", f"₹{pred['revenue_estimate']:.1f} Cr")
-        m3.metric("Expected Investment Yield ROI", f"{pred['roi_percentage']:.1f}%")
-        
-        st.info(f"**Engine Framework Risk Assessment:** {pred['risk_level']}")
-        
-        t1, t2, t3 = st.tabs(["Pillar Weight Details", "Strategic Guidance Log", "📜 Narrative Likeness Analysis"])
-        
-        with t1:
-            st.write(f"• Talent Profile Assessment Anchor: {pred['breakdown']['talent']:.1f}/100")
-            st.write(f"• Market Distribution Strategy Track: {pred['breakdown']['market']:.1f}/100")
-            st.write(f"• Script/Genre Content Structural Weight: {pred['breakdown']['content']:.1f}/100")
-            
-        with t2:
-            suc_reasons = analyze_success_reasons(inputs)
-            fail_reasons = analyze_failure_reasons(inputs)
-            if suc_reasons:
-                st.markdown("**Positive Predictive Multipliers:**")
-                for r in suc_reasons: st.write(f"✅ {r}")
-            if fail_reasons:
-                st.markdown("**Structural Financial Constraints:**")
-                for r in fail_reasons: st.write(f"⚠️ {r}")
-
-        with t3:
-            with st.spinner("Processing narrative likeness vector matching lists..."):
-                historical_comps = search_movies_by_synopsis(future_synopsis_text, TMDB_API_KEY)
-            
-            if not historical_comps:
-                st.warning("No statistically valid structural comps found for text input.")
-            else:
-                st.markdown("### Top Identified Narrative Archetypes")
-                for comp in historical_comps:
-                    st.markdown(f"**{comp.get('title')} ({comp.get('release_year')})**")
-                    st.caption(f"Historical Narrative Plot Context: {comp.get('overview')}")
-                    st.write(f"**Thematic Likeness Score:** {comp.get('likeness_score')}%")
-                    st.divider()
+        m1.metric("Predictability", f"{pred['predictability_score']:.1f}%")
+        m2.metric("Gross Revenue", f"₹{pred['revenue_estimate']:.1f} Cr")
+        m3.metric("ROI Yield", f"{pred['roi_percentage']:.1f}%")
 
 # =====================================================
-# RIGHT PANEL: TITLE SEARCH ENGINE & HISTORICAL LOOKUPS
+# RIGHT PANEL: TITLE SEARCH ENGINE
 # =====================================================
 
 with search_col:
     st.header("Historical Narrative Benchmarking")
+    query = st.text_input("Search Regional Reference Title", key="right_panel_title_query")
     
-    query = st.text_input(
-        "Search Regional Reference Title",
-        placeholder="Enter film title (e.g., Apex, Pushpa, Vikram)...",
-        key="right_panel_title_query"
-    )
-    
-    def search_movies_by_title_raw(title_query):
-        url = "https://api.themoviedb.org/3/search/movie"
-        params = {"api_key": TMDB_API_KEY, "query": title_query, "region": "IN"}
-        try:
-            res = requests.get(url, params=params, timeout=5)
-            return res.json().get("results", [])[:5]
-        except Exception:
-            return []
+    # Use a container to ensure results clear/refresh correctly
+    results_container = st.container()
 
-    movie_data = None
     if query:
-        with st.spinner("Searching title database records..."):
-            historical_pool = search_movies_by_title_raw(query)
+        historical_pool = search_movies_by_title_raw_internal(query)
+        if historical_pool:
+            options = {f"{m.get('title')} ({m.get('release_date', '####')[:4]})": m.get('id') for m in historical_pool}
+            selected_label = st.selectbox("Resolve Match", options=list(options.keys()))
             
-            if historical_pool:
-                # Map selection criteria straight to primary structural IDs to prevent naming collisions
-                options = {}
-                for m in historical_pool:
-                    t_str = m.get('title', 'Unknown Title')
-                    y_str = m.get('release_date', '####')[:4]
-                    m_id = m.get('id')
-                    if m_id:
-                        options[f"{t_str} ({y_str})"] = m_id
-                        
-                selected_label = st.selectbox(
-                    "Resolve Target Entity Identity Match",
-                    options=list(options.keys()),
-                    key="right_panel_selector_dropdown"
-                )
-                if selected_label:
-                    target_id = options[selected_label]
-                    
-                    with st.spinner("Loading complete production indexes..."):
-                        movie_details = fetch_full_movie_details(target_id, TMDB_API_KEY)
-                        
+            if selected_label:
+                movie_details = fetch_full_movie_details(options[selected_label], TMDB_API_KEY)
+                with results_container:
                     if movie_details:
-                        poster_path = movie_details.get("poster_path")
-                        poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
-                        genres = [g.get("name") for g in movie_details.get("genres", [])]
-                        
-                        movie_data = {
-                            "title": movie_details.get("title"),
-                            "year": movie_details.get("release_date", "####")[:4],
-                            "genre": ", ".join(genres) if genres else "N/A",
-                            "actors": movie_details.get("extracted_cast", "N/A"),
-                            "plot": movie_details.get("overview") or "No textual summary cataloged.",
-                            "poster": poster_url,
-                            "recommendations": movie_details.get("extracted_recommendations", [])
-                        }
-            else:
-                st.warning("No historical films indexed with that exact title string.")
+                        # FIXED: Added weights to st.columns
+                        card_left, card_right = st.columns()
+                        with card_left:
+                            if movie_details.get("poster_path"):
+                                st.image(f"https://image.tmdb.org/t/p/w500{movie_details['poster_path']}", use_container_width=True)
+                        with card_right:
+                            st.subheader(f"{movie_details.get('title')}")
+                            st.write(f"**Genre:** {', '.join([g['name'] for g in movie_details.get('genres', [])])}")
+                            st.write(f"**Cast:** {movie_details.get('extracted_cast', 'N/A')}")
+                        st.write(movie_details.get("overview", "No plot summary."))
+                        st.subheader("Similar Historical Films")
+                        for rec in movie_details.get("extracted_recommendations", []):
+                            st.markdown(f"• {rec.get('title')}")
 
-    # RENDER ENGINE PROFILE CARD
-    if movie_data:
-        st.write("") # Margin spacer
-        card_left, card_right = st.columns()
-        
-        with card_left:
-            if movie_data["poster"]:
-                st.image(movie_data["poster"], use_container_width=True)
-            else:
-                st.markdown(
-                    "<div style='border:1px dashed #444; height:240px; display:flex; "
-                    "align-items:center; justify-content:center; border-radius:6px; color:#666;'>"
-                    "No Poster Found</div>", unsafe_allow_html=True
-                )
-                
-        with card_right:
-            st.subheader(f"{movie_data['title']} ({movie_data['year']})")
-            st.markdown(f"**Genre:** {movie_data['genre']}")
-            st.markdown(f"**Cast:** {movie_data['actors']}")
-        
-        # Clear normal paragraph formatting style for synopsis text block (Removes blue tint box)
-        st.write("")
-        st.write(movie_data["plot"])
+def search_movies_by_title_raw_internal(title_query):
+    try:
+        res = requests.get("https://api.themoviedb.org/3/search/movie", 
+                           params={"api_key": TMDB_API_KEY, "query": title_query, "region": "IN"}, timeout=5)
+        return res.json().get("results", [])[:5]
+    except: return []
 
-        # STYLED NATIVE RECOMMENDATIONS LISTS
-        st.write("")
-        st.subheader("Similar Historical Films")
-
-        if movie_data["recommendations"]:
-            for movie in movie_data["recommendations"]:
-                st.markdown(f"• {movie.get('title')}")
-        else:
-            st.info("No matching cross-references indexed for this specific feature set.")
-
-# =====================================================
 # FOOTER ARCHITECTURE
-# =====================================================
 st.divider()
 st.markdown("""
 <div style="text-align: center; color: #666; font-size: 0.85em;">
-    <p>Cinema Predictability Model v5 | Powered by OMDB/TMDB APIs & Curated South Indian Database</p>
-    <p>Predictions are probabilistic estimates based on historical patterns. No model perfectly predicts creative industries.</p>
-</div>
-""", unsafe_allow_html=True)
-
-# =====================================================
-# FOOTER
-# =====================================================
-
-st.divider()
-st.markdown("""
-<div style="text-align: center; color: #666; font-size: 0.85em;">
-    <p>Cinema Predictability Model v5 | Powered by OMDB/TMDB APIs & Curated South Indian Database</p>
-    <p>Predictions are probabilistic estimates based on historical patterns. No model perfectly predicts creative industries.</p>
-</div>
-""", unsafe_allow_html=True)
