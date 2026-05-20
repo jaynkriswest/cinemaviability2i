@@ -1,2 +1,3 @@
-Claudegem 1i consists of the original code.
+Current files on 05202026 from new prompt from claude at 4:44pm
+Claudegem 1i consists of the original code - this is old code. Old Code in Not working - Before 05202026 1644hrs prompt.
 App 2 - 05-13-2026 11;31am used claude code.
