@@ -361,51 +361,85 @@ with search_col:
         key="search_input_field"
     )
     
+    # Initialize movie_data clearly at the top of the scope
     movie_data = None
+    
     if query:
         with st.spinner("Searching title database records..."):
-            # FIXED: Uses direct keyword search instead of passing text titles into plot parser functions
             historical_pool = search_movies_by_title_raw(query)
             
             if historical_pool:
-                options = {
-                    f"{m.get('title')} ({m.get('release_date','    ')[:4]})": m.get("title")
-                    for m in historical_pool
-                }
+                # Build an explicit identity lookup map
+                options = {}
+                for m in historical_pool:
+                    title_str = m.get('title', 'Unknown')
+                    year_str = m.get('release_date', '####')[:4]
+                    label = f"{title_str} ({year_str})"
+                    options[label] = title_str
+                
                 selected_label = st.selectbox(
                     "Resolve Target Entity Identity Match",
-                    options=list(options.keys())
+                    options=list(options.keys()),
+                    key="resolved_identity_selectbox"
                 )
+                
                 if selected_label:
+                    # Explicit fetch call mapped back to variable
                     movie_data = fetch_movie(options[selected_label])
             else:
                 st.warning("No historical films indexed with that exact title string.")
 
+    # RENDER ENGINE PROFILE CARD
     if movie_data:
-        card_left, card_right = st.columns()
+        st.write("") # Margin spacer
+        card_left, card_right = st.columns([1, 2])
         
         with card_left:
-            if movie_data["Poster"]:
+            # Check safely for both casing options to avoid variable mismatch dropouts
+            poster_src = movie_data.get("Poster") or movie_data.get("poster")
+            if poster_src:
                 st.image(
-                    movie_data["Poster"],
+                    poster_src,
                     use_container_width=True
                 )
+            else:
+                # Placeholder container UI block when no image exists on TMDB CDN
+                st.markdown(
+                    "<div style='border:1px dashed #444; height:240px; display:flex; "
+                    "align-items:center; justify-content:center; border-radius:6px; color:#666;'>"
+                    "No Poster Found</div>", 
+                    unsafe_allow_html=True
+                )
+                
         with card_right:
-            st.subheader(f"{movie_data['Title']} ({movie_data['Year']})")
-            st.write(f"**Genre:** {movie_data['Genre']}")
-            st.write(f"**Cast Profile:** {movie_data['Actors']}")
+            display_title = movie_data.get("Title") or movie_data.get("title", "Unknown Film")
+            display_year = movie_data.get("Year") or movie_data.get("year", "####")
+            display_genre = movie_data.get("Genre") or movie_data.get("genre", "N/A")
+            display_cast = movie_data.get("Actors") or movie_data.get("actors", "N/A")
+            
+            st.subheader(f"{display_title} ({display_year})")
+            st.markdown(f"**Genre Blueprint:** {display_genre}")
+            st.markdown(f"**Cast Profile Matrix:** {display_cast}")
         
-        st.write(f"**Overview:** {movie_data['Plot']}")
+        # Display Plot Summary Context
+        display_plot = movie_data.get("Plot") or movie_data.get("plot") or "No textual summary cataloged."
+        st.markdown(f"**Narrative Synopsis Abstract:**")
+        st.info(display_plot)
 
+        # SIMILAR CROSS REFERENCES SECTION
         st.markdown("---")
         st.subheader("Similar Historical Box Office Archetypes")
 
-        similar_movies = get_similar_movies(movie_data['Title'])
+        with st.spinner("Analyzing related database entries..."):
+            similar_movies = get_similar_movies(display_title)
+            
         if similar_movies:
             for movie in similar_movies:
-                st.markdown(f"• {movie.get('title')} ({movie.get('release_date', '####')[:4]})")
+                sim_title = movie.get('title', 'Unknown')
+                sim_date = movie.get('release_date', '####')[:4]
+                st.markdown(f"• **{sim_title}** ({sim_date})")
         else:
-            st.info("No matching cross-references indexed for this specific feature set.")
+            st.info("No matching historical cross-references indexed for this specific dataset.")
 
 # =====================================================
 # FOOTER
