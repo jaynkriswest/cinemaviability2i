@@ -36,7 +36,7 @@ from movie_insights import (
 load_dotenv()
 
 st.set_page_config(
-    page_title="Cinema Intelligence Platform",
+    page_title="Cinema Intelligence Platform v2.3",
     layout="wide"
 )
 
